@@ -1,7 +1,3 @@
-variable "ecr_name" { type = string }
-variable "scan_on_push" { type = bool, default = true }
-variable "tags" { type = map(string), default = {} }
-
 resource "aws_ecr_repository" "repo" {
   name                 = var.ecr_name
   image_tag_mutability = "MUTABLE"

@@ -16,7 +16,7 @@ variable "aws_region" {
   default = "us-west-2"
 }
 
-# S3 backend module (для створення бакета і таблиці DynamoDB)
+# S3 backend module
 module "s3_backend" {
   source      = "./modules/s3-backend"
   bucket_name = var.s3_bucket_name

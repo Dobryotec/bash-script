@@ -1,11 +1,3 @@
-variable "bucket_name" {
-  type = string
-}
-
-variable "region" {
-  type = string
-  default = "us-west-2"
-}
 
 resource "aws_s3_bucket" "tf_state" {
   bucket = var.bucket_name
