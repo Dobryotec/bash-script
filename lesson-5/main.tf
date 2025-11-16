@@ -77,12 +77,12 @@ variable "availability_zones" {
 
 variable "vpc_name" {
   type = string
-  default = "lesson-5-vpc"
+  default = "lesson-7-vpc"
 }
 
 variable "ecr_name" {
   type = string
-  default = "lesson-5-ecr"
+  default = "lesson-7-ecr"
 }
 
 variable "ecr_scan_on_push" {
@@ -93,7 +93,17 @@ variable "ecr_scan_on_push" {
 variable "tags" {
   type = map(string)
   default = {
-    Project = "lesson-5"
+    Project = "lesson-7"
     Owner   = "student"
   }
+}
+
+# EKS Module
+module "eks" {
+  source = "./modules/eks"
+
+  cluster_name     = "lesson-7-eks"
+  vpc_id           = module.vpc.vpc_id
+  private_subnets  = module.vpc.private_subnets
+  tags             = var.tags
 }

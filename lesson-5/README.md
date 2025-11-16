@@ -1,84 +1,107 @@
-# lesson-5 — Terraform AWS infra (S3 backend + VPC + ECR)
+# Lesson 7: EKS + Django + Helm
 
-## Project Description
+This project deploys:
 
-This project creates an infrastructure in AWS that includes:
+- VPC with public and private subnets
+- S3 + DynamoDB for Terraform state
+- ECR repository
+- EKS Kubernetes cluster
+- Helm chart for deploying a Django application
 
-- **S3 bucket + DynamoDB** for storing and locking the Terraform state.
-- **VPC** with 3 public and 3 private subnets, an **Internet Gateway**, and a
-  **NAT Gateway**.
-- **ECR repository** for storing Docker images with automatic image scanning
-  enabled.
+---
 
-## Project Structure
+## Prerequisites
 
-| File / Folder         | Description                                             |
-| --------------------- | ------------------------------------------------------- |
-| `main.tf`             | Root configuration combining all modules                |
-| `backend.tf`          | Terraform backend configuration (S3 + DynamoDB)         |
-| `outputs.tf`          | Output variables for AWS resources                      |
-| `modules/s3-backend/` | Creates S3 bucket and DynamoDB for Terraform state      |
-| `modules/vpc/`        | Creates VPC, subnets, Internet Gateway, and NAT Gateway |
-| `modules/ecr/`        | Creates ECR repository for Docker images                |
-| `README.md`           | Project documentation                                   |
+- AWS CLI configured (`aws configure`)
+- Terraform ≥ 1.0
+- Docker
+- `kubectl`
+- `helm`
+- Local Django Docker image from Lesson 4 (`my-django-app:latest`)
 
-## Modules Description
+---
 
-### s3-backend
-
-- Creates an **S3 bucket** for storing Terraform state.
-- Creates a **DynamoDB table** for state locking to prevent concurrent changes.
-- Ensures safe collaboration in team environments.
-
-### vpc
-
-- Creates a **VPC** with customizable CIDR.
-- Creates **3 public and 3 private subnets** across different availability
-  zones.
-- Creates an **Internet Gateway** for public access.
-- Creates a **NAT Gateway** for private subnet internet access.
-
-### ecr
-
-- Creates an **ECR repository** for storing Docker images.
-- Enables **automatic image scanning** to improve security.
-
-## Important Notes
-
-1. **Before** running `terraform init`, make sure to **edit** the `backend.tf`
-   file and replace `terraform-lesson5-demo-bucket` with your actual S3 bucket
-   name.
-2. If you want Terraform to automatically create the backend bucket, you can
-   apply only the `s3-backend` module **without** using a backend (by
-   temporarily commenting out the backend block or using a separate working
-   directory for the state).  
-   The simpler way is to **create the bucket manually** using the AWS Console or
-   CLI and then specify it in `backend.tf`.
-
-## Commands
-
-1. Configure AWS credentials (for example, via `aws configure` or environment
-   variables).
-2. Initialize Terraform:
+## Deploy Infrastructure (Terraform)
 
 ```bash
+# Initialize
 terraform init
+
+# Review plan
+terraform plan -var-file=variables.tfvars
+
+# Apply
+terraform apply -var-file=variables.tfvars
+
 ```
 
-3. See the execution plan:
+2. Post-Deployment Steps (Run in Terminal)
+
+2.1 Connect to EKS Cluster
 
 ```bash
-terraform plan
+# Update kubeconfig
+aws eks update-kubeconfig --name lesson-7-eks --region us-west-2
+
+# Verify connection
+kubectl get nodes
 ```
 
-4. Apply the changes to create resources:
+2.2 Build and Push Docker Image to ECR
 
 ```bash
-terraform apply
+# Build image from Dockerfile
+docker build -t my-django-app:latest .
+
+# Get ECR repository URL
+ECR_URL=$(terraform output -raw ecr_repository_url)
+echo "ECR Repository URL: $ECR_URL"
+
+# Authenticate Docker to ECR
+aws ecr get-login-password --region us-west-2 | \
+  docker login --username AWS --password-stdin $ECR_URL
+
+# Tag local image
+docker tag my-django-app:latest $ECR_URL:latest
+
+# Push to ECR
+docker push $ECR_URL:latest
 ```
 
-5. Destroy the resources when no longer needed:
+2.3 Install Helm Chart
 
 ```bash
-terraform destroy
+# Install or upgrade the Django app
+helm upgrade --install django-app ./charts/django-app \
+  --set image.repository=$ECR_URL \
+  --set image.tag=latest
+```
+
+2.4 Verify Deployment
+
+```bash
+# Check pods
+kubectl get pods -l app.kubernetes.io/name=django-app
+
+# Check service
+kubectl get svc django-app
+
+# Get external URL (wait 1–2 minutes)
+kubectl get svc django-app -o jsonpath='{.status.loadBalancer.ingress[0].hostname}{"\n"}'
+
+# Check HPA
+kubectl get hpa
+
+# View ConfigMap
+kubectl get configmap django-app -o yaml
+```
+
+Cleanup (Optional)
+
+```bash
+# Uninstall Helm release
+helm uninstall django-app
+
+# Destroy infrastructure
+terraform destroy -var-file=variables.tfvars
 ```
