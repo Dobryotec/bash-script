@@ -1,0 +1,37 @@
+pipeline {
+    agent any
+
+    environment {
+        ECR_URL   = credentials('ecr-url')
+        IMAGE_TAG = "${env.GIT_COMMIT.take(8)}"
+    }
+
+    stages {
+        stage('Build & Push to ECR') {
+            steps {
+                sh '''
+                aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin ${ECR_URL}
+                docker build -t ${ECR_URL}:${IMAGE_TAG} -t ${ECR_URL}:latest ./app
+                docker push ${ECR_URL}:${IMAGE_TAG}
+                docker push ${ECR_URL}:latest
+                '''
+            }
+        }
+
+        stage('Update Helm values.yaml') {
+            steps {
+                withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
+                    sh '''
+                    cd charts/django-app
+                    sed -i "s/tag: .*/tag: ${IMAGE_TAG}/" values.yaml
+                    git config user.email "jenkins@ci.com"
+                    git config user.name "Jenkins"
+                    git add values.yaml
+                    git commit -m "Jenkins CI: update image tag ${IMAGE_TAG}" || echo "No changes"
+                    git push https://$GITHUB_TOKEN@github.com/Dobryotec/bash-script.git HEAD:lesson-8-9
+                    '''
+                }
+            }
+        }
+    }
+}

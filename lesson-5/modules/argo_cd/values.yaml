@@ -1,0 +1,28 @@
+server:
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+
+  ingress:
+    enabled: false
+
+  extraArgs:
+    - --insecure
+
+dex:
+  enabled: false
+
+controller:
+  resources:
+    limits:
+      cpu: 500m
+      memory: 1024Mi
+
+repoServer:
+  resources:
+    limits:
+      cpu: 500m
+      memory: 1024Mi
+
+applicationSet:
+  enabled: false

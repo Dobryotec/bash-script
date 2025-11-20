@@ -1,0 +1,66 @@
+controller:
+  image: 'jenkins/jenkins'
+  tag: 'lts-jdk21'
+
+  adminPassword: ${admin_password}
+
+  servicePort: 80
+  targetPort: 8080
+
+  JCasC:
+    securityRealm: |
+      local:
+        users:
+          - id: admin
+            password: ${admin_password}
+    authorizationStrategy: |
+      roleBased:
+        roles:
+          global:
+            - name: "admin"
+              description: "Jenkins Administrators"
+              permissions:
+                - "Overall/Administer"
+              assignments:
+                - "admin"
+
+  agent:
+    kubernetes:
+      enabled: true
+      defaultsProviderTemplate: |
+        apiVersion: v1
+        kind: Pod
+        spec:
+          containers:
+          - name: jnlp
+            resources:
+              limits:
+                cpu: "500m"
+                memory: "512Mi"
+              requests:
+                cpu: "200m"
+                memory: "256Mi"
+          - name: kaniko
+            image: gcr.io/kaniko-project/executor:debug-v1.23.2
+            command:
+              - sleep
+            args:
+              - "999999"
+            volumeMounts:
+              - name: docker-config
+                mountPath: /kaniko/.docker
+          - name: helm
+            image: alpine/helm:3.16.2
+            command:
+              - sleep
+            args:
+              - "999999"
+          volumes:
+            - name: docker-config
+              configMap:
+                name: jenkins-docker-config
+
+  persistence:
+    enabled: true
+    storageClass: 'gp3'
+    size: 20Gi

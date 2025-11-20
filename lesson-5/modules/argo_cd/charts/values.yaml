@@ -1,0 +1,2 @@
+djangoHelmRepoURL: 'https://github.com/Dobryotec/bash-script'
+ecrRepositoryURL: '111222333444.dkr.ecr.us-west-2.amazonaws.com/lesson-8-ecr'

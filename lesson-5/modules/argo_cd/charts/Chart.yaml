@@ -1,0 +1,5 @@
+apiVersion: v2
+name: argocd-apps
+description: Applications for ArgoCD (Django)
+version: 0.1.0
+type: application

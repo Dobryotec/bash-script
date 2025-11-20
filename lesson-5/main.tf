@@ -1,8 +1,19 @@
+
 terraform {
+  required_version = ">= 1.5.0"   
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 4.0"
+      version = ">= 5.0"
+    }
+    helm = {
+      source  = "hashicorp/helm"
+      version = ">= 2.12"
+    }
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = ">= 2.23"
     }
   }
 }
@@ -11,22 +22,16 @@ provider "aws" {
   region = var.aws_region
 }
 
-variable "aws_region" {
-  type    = string
-  default = "us-west-2"
-}
-
-# S3 backend module
+# S3 + DynamoDB backend
 module "s3_backend" {
-  source      = "./modules/s3-backend"
+  source = "./modules/s3-backend"
   bucket_name = var.s3_bucket_name
   table_name  = var.dynamodb_table_name
-  region      = var.aws_region
 }
 
-# VPC module
+# VPC
 module "vpc" {
-  source             = "./modules/vpc"
+  source = "./modules/vpc"
   vpc_cidr_block     = var.vpc_cidr_block
   public_subnets     = var.public_subnets
   private_subnets    = var.private_subnets
@@ -34,76 +39,33 @@ module "vpc" {
   vpc_name           = var.vpc_name
 }
 
-# ECR module
+# ECR
 module "ecr" {
-  source      = "./modules/ecr"
-  ecr_name    = var.ecr_name
-  scan_on_push = var.ecr_scan_on_push
-  tags        = var.tags
+  source = "./modules/ecr"
+  ecr_name       = var.ecr_name
+  scan_on_push   = var.ecr_scan_on_push
+  tags           = var.tags
 }
 
-# Variables expected to be set by user or default
-variable "s3_bucket_name" {
-  type = string
-  description = "S3 bucket name for Terraform state (create or use existing)."
-  default = ""
-}
-
-variable "dynamodb_table_name" {
-  type = string
-  description = "DynamoDB table name for Terraform state locking."
-  default = "terraform-locks"
-}
-
-variable "vpc_cidr_block" {
-  type = string
-  default = "10.0.0.0/16"
-}
-
-variable "public_subnets" {
-  type = list(string)
-  default = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
-}
-
-variable "private_subnets" {
-  type = list(string)
-  default = ["10.0.4.0/24", "10.0.5.0/24", "10.0.6.0/24"]
-}
-
-variable "availability_zones" {
-  type = list(string)
-  default = ["us-west-2a", "us-west-2b", "us-west-2c"]
-}
-
-variable "vpc_name" {
-  type = string
-  default = "lesson-7-vpc"
-}
-
-variable "ecr_name" {
-  type = string
-  default = "lesson-7-ecr"
-}
-
-variable "ecr_scan_on_push" {
-  type = bool
-  default = true
-}
-
-variable "tags" {
-  type = map(string)
-  default = {
-    Project = "lesson-7"
-    Owner   = "student"
-  }
-}
-
-# EKS Module
+# EKS
 module "eks" {
-  source = "./modules/eks"
+  source         = "./modules/eks"
+  cluster_name   = var.cluster_name
+  vpc_id         = module.vpc.vpc_id
+  private_subnets = module.vpc.private_subnets
+  tags           = var.tags
+}
 
-  cluster_name     = "lesson-7-eks"
-  vpc_id           = module.vpc.vpc_id
-  private_subnets  = module.vpc.private_subnets
-  tags             = var.tags
+module "jenkins" {
+  source        = "./modules/jenkins"
+  cluster_name  = module.eks.cluster_name
+  depends_on    = [module.eks]
+}
+
+module "argo_cd" {
+  source               = "./modules/argo_cd"
+  cluster_name         = module.eks.cluster_name
+  django_helm_repo_url = var.django_helm_repo_url
+  ecr_repository_url   = module.ecr.repository_url
+  depends_on           = [module.eks, module.jenkins]
 }
