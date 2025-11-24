@@ -69,3 +69,22 @@ module "argo_cd" {
   ecr_repository_url   = module.ecr.repository_url
   depends_on           = [module.eks, module.jenkins]
 }
+
+module "rds" {
+  source = "./modules/rds"
+
+  create             = true
+  use_aurora         = true  
+  cluster_identifier = "lesson-9-db"
+  db_name            = "mydb"
+  username           = "admin"
+  password           = "SuperSecret123!"
+  engine             = "postgres"
+  engine_version     = "15.5"
+  instance_class     = "db.t3.medium"
+
+  subnet_ids = module.vpc.private_subnets
+  vpc_id     = module.vpc.vpc_id
+
+  tags = var.tags
+}

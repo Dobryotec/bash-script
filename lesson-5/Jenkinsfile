@@ -28,7 +28,7 @@ pipeline {
                     git config user.name "Jenkins"
                     git add values.yaml
                     git commit -m "Jenkins CI: update image tag ${IMAGE_TAG}" || echo "No changes"
-                    git push https://$GITHUB_TOKEN@github.com/Dobryotec/bash-script.git HEAD:lesson-8-9
+                    git push https://$GITHUB_TOKEN@github.com/Dobryotec/bash-script.git HEAD:lesson-db-module
                     '''
                 }
             }

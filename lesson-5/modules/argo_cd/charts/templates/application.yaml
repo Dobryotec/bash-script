@@ -10,7 +10,7 @@ spec:
 
   source:
     repoURL: https://github.com/Dobryotec/bash-script
-    targetRevision: lesson-8-9
+    targetRevision: lesson-db-module
     path: charts/django-app
     helm:
       valueFiles:

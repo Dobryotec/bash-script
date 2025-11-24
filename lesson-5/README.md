@@ -1,15 +1,62 @@
-# Lesson 8 — CI/CD with Jenkins + ArgoCD + Helm + Terraform
+# Lesson 9 — Universal RDS / Aurora Module + Full CI/CD (Lesson 8)
 
-This project implements a full CI/CD process:
+This repository combines:
 
-- Terraform deploys VPC, S3 + DynamoDB, ECR, EKS.
-- Jenkins is installed via Helm and handles the pipeline: builds Docker image,
-  pushes to ECR, updates tag in values.yaml, pushes to Git.
-- ArgoCD is installed via Helm, monitors the repository with the Helm chart and
-  automatically synchronizes deployment in EKS.
-- The Django application is deployed via a custom Helm chart.
+- **Full CI/CD pipeline from Lesson 8** (Jenkins + ArgoCD + Helm + EKS)
+- **NEW reusable production-grade RDS module** that can create:
+  - Regular RDS instance (PostgreSQL/MySQL)
+  - Aurora PostgreSQL cluster  
+    …with just one flag: `use_aurora = true/false`
 
 ---
+
+### Features
+
+- `use_aurora = true` → Aurora PostgreSQL cluster + writer instance
+- `use_aurora = false` → single RDS instance
+- Automatically creates:
+  - DB Subnet Group
+  - Security Group (ingress only from VPC)
+  - Custom Parameter Group (`log_statement=all`, `work_mem=8192`)
+- Supports PostgreSQL & MySQL
+- Fully reusable, typed variables with defaults
+
+### Usage Examples
+
+```hcl
+# Aurora PostgreSQL (recommended for production)
+module "db_aurora" {
+  source = "./modules/rds"
+
+  use_aurora         = true
+  cluster_identifier = "prod-aurora"
+  db_name            = "myapp"
+  username           = "admin"
+  password           = "SuperSecret123!"
+  engine             = "postgres"
+  instance_class     = "db.r6g.large"
+
+  subnet_ids = module.vpc.private_subnets
+  vpc_id     = module.vpc.vpc_id
+}
+
+# Regular RDS PostgreSQL (for testing / legacy)
+module "db_single" {
+  source = "./modules/rds"
+
+  use_aurora         = false
+  cluster_identifier = "test-single"
+  db_name            = "testdb"
+  username           = "admin"
+  password           = "SuperSecret123!"
+  allocated_storage  = 50
+  instance_class     = "db.t3.medium"
+
+  subnet_ids = module.vpc.private_subnets
+  vpc_id     = module.vpc.vpc_id
+}
+
+```
 
 ## Prerequisites
 
@@ -64,7 +111,7 @@ After apply, you will get outputs:
 terraform output how_to_connect_eks
 
 # Or run it directly (always correct name/region)
-aws eks update-kubeconfig --name lesson-8-eks --region us-west-2
+aws eks update-kubeconfig --name lesson-9-eks --region us-west-2
 
 # Verify connection
 kubectl get nodes
@@ -85,7 +132,7 @@ kubectl get nodes
   1. Pipeline from SCM → Git → repository:
      https://github.com/Dobryotec/bash-script
 
-  2. Branch: lesson-8-9
+  2. Branch: lesson-db-module
 
   3. Script Path: Jenkinsfile
 
