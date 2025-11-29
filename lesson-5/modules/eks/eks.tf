@@ -2,13 +2,13 @@
 resource "aws_eks_cluster" "this" {
   name     = var.cluster_name
   role_arn = aws_iam_role.eks_cluster.arn
-  version  = "1.29"  # актуальна версія
+  version  = "1.29" 
 
   vpc_config {
     subnet_ids              = var.private_subnets
     endpoint_private_access = true
     endpoint_public_access  = true
-    public_access_cidrs     = ["0.0.0.0/0"]  # обмеж у продакшні!
+    public_access_cidrs     = ["0.0.0.0/0"]
   }
 
   tags = var.tags

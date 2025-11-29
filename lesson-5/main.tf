@@ -1,6 +1,5 @@
-
 terraform {
-  required_version = ">= 1.5.0"   
+  required_version = ">= 1.5.0"
 
   required_providers {
     aws = {
@@ -24,14 +23,14 @@ provider "aws" {
 
 # S3 + DynamoDB backend
 module "s3_backend" {
-  source = "./modules/s3-backend"
+  source      = "./modules/s3-backend"
   bucket_name = var.s3_bucket_name
   table_name  = var.dynamodb_table_name
 }
 
 # VPC
 module "vpc" {
-  source = "./modules/vpc"
+  source             = "./modules/vpc"
   vpc_cidr_block     = var.vpc_cidr_block
   public_subnets     = var.public_subnets
   private_subnets    = var.private_subnets
@@ -41,27 +40,29 @@ module "vpc" {
 
 # ECR
 module "ecr" {
-  source = "./modules/ecr"
-  ecr_name       = var.ecr_name
-  scan_on_push   = var.ecr_scan_on_push
-  tags           = var.tags
+  source       = "./modules/ecr"
+  ecr_name     = var.ecr_name
+  scan_on_push = var.ecr_scan_on_push
+  tags         = var.tags
 }
 
 # EKS
 module "eks" {
-  source         = "./modules/eks"
-  cluster_name   = var.cluster_name
-  vpc_id         = module.vpc.vpc_id
+  source          = "./modules/eks"
+  cluster_name    = var.cluster_name
+  vpc_id          = module.vpc.vpc_id
   private_subnets = module.vpc.private_subnets
-  tags           = var.tags
+  tags            = var.tags
 }
 
+# Jenkins
 module "jenkins" {
-  source        = "./modules/jenkins"
-  cluster_name  = module.eks.cluster_name
-  depends_on    = [module.eks]
+  source       = "./modules/jenkins"
+  cluster_name = module.eks.cluster_name
+  depends_on   = [module.eks]
 }
 
+# ArgoCD
 module "argo_cd" {
   source               = "./modules/argo_cd"
   cluster_name         = module.eks.cluster_name
@@ -71,12 +72,11 @@ module "argo_cd" {
 }
 
 module "rds" {
-  source = "./modules/rds"
-
+  source             = "./modules/rds"
   create             = true
-  use_aurora         = true  
-  cluster_identifier = "lesson-9-db"
-  db_name            = "mydb"
+  use_aurora         = true
+  cluster_identifier = "final-project-db"     
+  db_name            = "myapp"
   username           = "admin"
   password           = "SuperSecret123!"
   engine             = "postgres"
@@ -85,6 +85,11 @@ module "rds" {
 
   subnet_ids = module.vpc.private_subnets
   vpc_id     = module.vpc.vpc_id
+  tags       = var.tags
+}
 
-  tags = var.tags
+# Monitoring (Prometheus + Grafana)
+module "monitoring" {
+  source     = "./modules/monitoring"
+  depends_on = [module.eks]
 }

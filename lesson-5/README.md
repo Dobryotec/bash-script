@@ -1,188 +1,93 @@
-# Lesson 9 — Universal RDS / Aurora Module + Full CI/CD (Lesson 8)
+# Final DevOps Project
 
-This repository combines:
+## Architecture Overview
 
-- **Full CI/CD pipeline from Lesson 8** (Jenkins + ArgoCD + Helm + EKS)
-- **NEW reusable production-grade RDS module** that can create:
-  - Regular RDS instance (PostgreSQL/MySQL)
-  - Aurora PostgreSQL cluster  
-    …with just one flag: `use_aurora = true/false`
-
----
-
-### Features
-
-- `use_aurora = true` → Aurora PostgreSQL cluster + writer instance
-- `use_aurora = false` → single RDS instance
-- Automatically creates:
-  - DB Subnet Group
-  - Security Group (ingress only from VPC)
-  - Custom Parameter Group (`log_statement=all`, `work_mem=8192`)
-- Supports PostgreSQL & MySQL
-- Fully reusable, typed variables with defaults
-
-### Usage Examples
-
-```hcl
-# Aurora PostgreSQL (recommended for production)
-module "db_aurora" {
-  source = "./modules/rds"
-
-  use_aurora         = true
-  cluster_identifier = "prod-aurora"
-  db_name            = "myapp"
-  username           = "admin"
-  password           = "SuperSecret123!"
-  engine             = "postgres"
-  instance_class     = "db.r6g.large"
-
-  subnet_ids = module.vpc.private_subnets
-  vpc_id     = module.vpc.vpc_id
-}
-
-# Regular RDS PostgreSQL (for testing / legacy)
-module "db_single" {
-  source = "./modules/rds"
-
-  use_aurora         = false
-  cluster_identifier = "test-single"
-  db_name            = "testdb"
-  username           = "admin"
-  password           = "SuperSecret123!"
-  allocated_storage  = 50
-  instance_class     = "db.t3.medium"
-
-  subnet_ids = module.vpc.private_subnets
-  vpc_id     = module.vpc.vpc_id
-}
-
-```
-
-## Prerequisites
-
-- AWS CLI configured (`aws configure`)
-- Terraform ≥ 1.0
-- Docker
-- `kubectl`
-- `helm`
-- `jenkins`(for pipeline setup)
-- GitHub Personal Access Token for Jenkins (repo rights)
-- Local Django Docker image from Lesson 4 (`my-django-app:latest`)
+| Component          | Technology                                   | Purpose                      |
+| ------------------ | -------------------------------------------- | ---------------------------- |
+| Cloud              | AWS                                          | Infrastructure as Code       |
+| IaC                | Terraform                                    | All resources                |
+| Network            | VPC + private/public subnets                 | Isolation                    |
+| Container Registry | ECR                                          | Docker images                |
+| Kubernetes         | EKS                                          | Application runtime          |
+| Database           | RDS Aurora PostgreSQL / single               | Persistent storage           |
+| CI                 | Jenkins (Helm)                               | Build → ECR → Git commit     |
+| CD                 | ArgoCD (Helm)                                | GitOps continuous deployment |
+| Application        | Django (custom Helm chart)                   | Example workload             |
+| Monitoring         | Prometheus + Grafana (kube-prometheus-stack) | Metrics, alerts, dashboards  |
+| Autoscaling        | HPA (CPU + Memory)                           | Horizontal Pod Autoscaler    |
 
 ---
 
-## CI/CD Scheme
+## Features
 
-git push (changes in Django code) → Jenkins (runs Jenkinsfile) → build Docker
-image → push to ECR with GIT_COMMIT tag → update image.tag in
-charts/django-app/values.yaml → git commit/push back to the repository → ArgoCD
-sees the change → automatic sync → new deployment in EKS (Deployment, Service,
-HPA, ConfigMap).
+- Universal RDS module (`use_aurora = true/false`)
+- Full GitOps via ArgoCD
+- Automated CI/CD pipeline (Jenkins → ECR → Git → ArgoCD)
+- Production-grade security (private subnets, SG, IAM)
+- Observability stack (Prometheus + Grafana)
+- Autoscaling based on CPU and memory
+- Zero manual operations after `terraform apply`
 
 ---
 
-## Deploy Infrastructure (Terraform)
+## How to Deploy
 
 ```bash
-# Initialize
+# 1. Clone & checkout final branch
+git clone https://github.com/Dobryotec/bash-script.git
+cd bash-script
+git checkout final-project
+
+# 2. Deploy everything
 terraform init
-
-# Review plan
 terraform plan
-
-# Apply
-terraform apply
-
+terraform apply   # type "yes" when prompted
 ```
 
-After apply, you will get outputs:
+## All resources are created automatically:
 
-- ecr_repository_url
-- eks_cluster_name
-- jenkins_url + jenkins_admin_password
-- argocd_url + argocd_admin_password
+- EKS cluster
+- Jenkins, ArgoCD, Prometheus+Grafana via Helm
+- RDS (Aurora by default)
+- Django app deployed via Helm chart
 
-2. Post-Deployment Steps (Run in Terminal)
+## Access Applications:
 
-2.1 Connect to EKS Cluster
+# Connect to EKS
 
-```bash
-# Terraform already shows the exact command in outputs:
-terraform output how_to_connect_eks
+$(terraform output -raw how_to_connect_eks)
 
-# Or run it directly (always correct name/region)
-aws eks update-kubeconfig --name lesson-9-eks --region us-west-2
+# Jenkins
 
-# Verify connection
-kubectl get nodes
-```
+kubectl port-forward svc/jenkins 8080:8080 -n jenkins → http://localhost:8080
+(admin / check output for password)
 
-2.2 Set up Jenkins (once)
+# ArgoCD
 
-- Open jenkins_url in browser
-- Login: admin / password from output
-- Manage Jenkins → Credentials → Add:
+kubectl port-forward svc/argocd-server 8081:443 -n argocd →
+https://localhost:8081 (admin / check output for password)
 
-  1. ID: ecr-url (Secret text, value: ecr_repository_url)
+# Grafana
 
-  2. ID: github-token (Secret text, value: your GitHub PAT)
+kubectl port-forward svc/grafana 3000:80 -n monitoring → http://localhost:3000
+(admin / admin123)
 
-- New Item → Pipeline → name "Django-CI"
+# Django Application
 
-  1. Pipeline from SCM → Git → repository:
-     https://github.com/Dobryotec/bash-script
+kubectl get svc django-app → access via LoadBalancer external IP
 
-  2. Branch: lesson-db-module
+## CI/CD Pipeline Flow
 
-  3. Script Path: Jenkinsfile
+git push (to final-project branch)  
+↓ Jenkins → builds Docker image from Django/app/  
+↓ Push to ECR with git commit tag  
+↓ Update image.tag in charts/django-app/values.yaml  
+↓ git commit + push back to repository  
+↓ ArgoCD detects change → automatic sync  
+↓ New pods with updated image + HPA + monitoring
 
-  4. Save
-
-  2.3 Set up ArgoCD (once)
-
-  - Open argocd_url in browser
-  - Login: admin / password from output
-  - Check Application "django-prod" — it should synchronize automatically
-
-    2.4 Build and Push Docker Image (test pipeline run)
+## Cleanup
 
 ```bash
-# Build local (optional)
-docker build -t my-django-app:latest ./app
-
-# Run Jenkins pipeline in browser (Build Now)
-# It will build, push to ECR, update tag, push to Git
-# ArgoCD will automatically deploy the new image (check in ArgoCD UI)
-```
-
-2.5 Verify Deployment
-
-```bash
-# Check pods
-kubectl get pods -l app.kubernetes.io/name=django-app
-
-# Check service
-kubectl get svc django-app
-
-# Get external URL (wait 1–2 minutes)
-kubectl get svc django-app -o jsonpath='{.status.loadBalancer.ingress[0].hostname}{"\n"}'
-
-# Check HPA
-kubectl get hpa
-
-# View ConfigMap
-kubectl get configmap django-app -o yaml
-
-# Check ArgoCD status
-kubectl get applications -n argocd
-```
-
-Cleanup (Optional)
-
-```bash
-# Uninstall Helm release
-helm uninstall django-app
-
-# Destroy infrastructure
-terraform destroy
+terraform destroy # destroys ALL resources including S3 bucket & DynamoDB table
 ```
